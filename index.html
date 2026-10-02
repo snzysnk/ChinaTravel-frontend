@@ -114,9 +114,12 @@
 </main>
 
 <script>
-  // API_BASE 是后端地址。默认与 configs/config.yaml 中的端口保持一致，
-  // 需要指向别处时改这一行即可（本页零构建，没有环境变量机制）。
-  const API_BASE = 'http://localhost:8080';
+  // API_BASE 是后端地址，其权威来源是后端仓库的 configs/config.yaml 中的
+  // server.port——后端实际监听哪个端口由那一处决定，本行必须与之一致。
+  // 改动后端端口时，除本行外还需同步 workspace 仓库 Makefile 的 BACKEND_PORT 提示值。
+  // 注意：后端支持 APP_SERVER_PORT 环境变量在运行期覆盖端口，那种情况下本行不会
+  // 自动跟随（本页零构建，没有环境变量机制），需手工调整。
+  const API_BASE = 'http://localhost:18080';
 
   /**
    * 统一的信封解析与请求入口——全页只有这一处发请求、只有这一处解析 code。
