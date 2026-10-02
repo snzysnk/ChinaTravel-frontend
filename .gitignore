@@ -1,0 +1,16 @@
+# 前端仓库的忽略规则。
+#
+# 前端为零构建的静态页面，由独立静态服务托管，没有构建产物需要忽略，
+# 因此这里只排除编辑器与本机产生的噪音文件。
+
+# 编辑器 / 本机
+.DS_Store
+.idea/
+.vscode/
+
+# Claude Code 会话态
+.claude/settings.local.json
+.claude/file-history/
+.claude/plans/
+.claude/todos/
+.claude/.cc-writes/

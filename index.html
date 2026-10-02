@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<!--
+  ChinaTravel 前端验收页（零构建的静态页面）。
+
+  用途：作为「前端页面 -> 后端接口 -> 领域层」这条链路的验收载体，
+  证明后端返回的 JSON 能被真实浏览器消费。它刻意不用任何框架与构建工具，
+  克隆仓库后直接起静态服务即可访问。
+
+  两条已知限制：
+  1. 【以文件协议打开不受支持】本页必须由 HTTP 静态服务托管
+     （见 Makefile 的 serve-frontend）。用 file:// 打开时浏览器的 Origin 是
+     "null"，无法匹配后端白名单，接口请求会被浏览器拦截——这是该访问方式的
+     固有限制，不是 bug。
+  2. 【页面逻辑增长时应评估迁移到带构建的前端工程】当前单文件、无模块化、
+     无类型检查。一旦页面数量或交互复杂度上升，应引入构建工具链后再扩展，
+     而不是继续往这个文件里堆代码。
+
+  与后端的唯一契约是响应信封 {code, msg, data}：HTTP 状态码恒为 200，
+  成功失败一律先看 code。解析逻辑统一收敛在 request() 一处。
+-->
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChinaTravel · 前后端链路验收</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --card: #ffffff;
+      --border: #e3e6ea;
+      --text: #1f2328;
+      --muted: #6b7280;
+      --ok: #1a7f37;
+      --ok-bg: #eaf6ec;
+      --bad: #b42318;
+      --bad-bg: #fdecea;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px 20px 64px;
+      background: var(--bg);
+      color: var(--text);
+      font: 15px/1.6 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    main { max-width: 760px; margin: 0 auto; }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    .subtitle { color: var(--muted); margin: 0 0 24px; font-size: 13px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 18px;
+      margin-bottom: 16px;
+    }
+    .card h2 { font-size: 14px; margin: 0 0 12px; color: var(--muted); font-weight: 600; }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .status.ok { color: var(--ok); background: var(--ok-bg); }
+    .status.bad { color: var(--bad); background: var(--bad-bg); }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+    ul.destinations { list-style: none; margin: 0; padding: 0; }
+    ul.destinations li {
+      padding: 12px 0;
+      border-top: 1px solid var(--border);
+    }
+    ul.destinations li:first-child { border-top: none; }
+    .name { font-weight: 600; }
+    .province {
+      margin-left: 8px;
+      font-size: 12px;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 6px;
+    }
+    .summary { color: var(--muted); font-size: 13px; margin-top: 2px; }
+    .empty, .error { color: var(--muted); font-size: 13px; padding: 8px 0; }
+    .error { color: var(--bad); }
+    button {
+      font: inherit;
+      font-size: 13px;
+      padding: 6px 14px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+    }
+    button:hover { background: #f2f4f6; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>ChinaTravel 前后端链路验收</h1>
+  <p class="subtitle">本页由独立静态服务托管，通过跨域请求访问后端接口。</p>
+
+  <section class="card">
+    <h2>服务连通状态</h2>
+    <span id="health" class="status bad"><span class="dot"></span><span id="health-text">检测中…</span></span>
+  </section>
+
+  <section class="card">
+    <h2>目的地列表</h2>
+    <div id="list"><p class="empty">加载中…</p></div>
+    <p style="margin: 12px 0 0;"><button id="refresh" type="button">重新加载</button></p>
+  </section>
+</main>
+
+<script>
+  // API_BASE 是后端地址。默认与 configs/config.yaml 中的端口保持一致，
+  // 需要指向别处时改这一行即可（本页零构建，没有环境变量机制）。
+  const API_BASE = 'http://localhost:8080';
+
+  /**
+   * 统一的信封解析与请求入口——全页只有这一处发请求、只有这一处解析 code。
+   *
+   * 契约：HTTP 状态码恒为 200，业务成败只看响应体的 code。
+   * 因此这里先校验 HTTP 与 JSON，再判断 code，最后返回 data 或抛出带 msg 的错误。
+   * 抛出而不是返回 null，是为了让调用方无法"忘记判空"而渲染出空白内容。
+   *
+   * @param {string} path 接口路径，如 '/api/destinations'
+   * @returns {Promise<*>} 信封中的 data 字段
+   * @throws {Error} 网络不可达、响应非 JSON、或 code 非零时抛出，message 为可展示的中文提示
+   */
+  async function request(path) {
+    let response;
+    try {
+      response = await fetch(API_BASE + path, { headers: { Accept: 'application/json' } });
+    } catch (cause) {
+      // fetch 只在网络层失败时 reject（后端未启动、被 CORS 拦截、DNS 失败等）。
+      throw new Error('无法连接后端服务，请确认后端已启动且本页来源在白名单内');
+    }
+
+    if (!response.ok) {
+      throw new Error('服务返回异常状态：HTTP ' + response.status);
+    }
+
+    let envelope;
+    try {
+      envelope = await response.json();
+    } catch (cause) {
+      throw new Error('响应不是合法的 JSON 信封');
+    }
+
+    if (envelope.code !== 0) {
+      // 失败信封：data 必为 null，只展示 msg，不尝试渲染 data。
+      throw new Error(envelope.msg || ('请求失败（code=' + envelope.code + '）'));
+    }
+    return envelope.data;
+  }
+
+  /**
+   * 渲染服务连通状态。
+   * 任何失败都收敛为"服务不可用"，不让异常冒泡到顶层——
+   * 后端挂掉时页面其余部分必须照常可用。
+   * @returns {Promise<void>}
+   */
+  async function renderHealth() {
+    const box = document.getElementById('health');
+    const text = document.getElementById('health-text');
+    try {
+      const data = await request('/api/health');
+      const state = (data && data.status) || 'unknown';
+      box.className = 'status ok';
+      text.textContent = '服务正常（status: ' + state + '）';
+    } catch (err) {
+      box.className = 'status bad';
+      text.textContent = '服务不可用：' + err.message;
+    }
+  }
+
+  /**
+   * 渲染目的地列表。
+   * 显式区分三种结果：有数据、空集合（空状态提示）、请求失败（错误提示）。
+   * @returns {Promise<void>}
+   */
+  async function renderList() {
+    const box = document.getElementById('list');
+    try {
+      const items = await request('/api/destinations');
+
+      if (!Array.isArray(items) || items.length === 0) {
+        // 空集合必须清掉上一次的内容并给出空状态，而不是留白或报错。
+        box.innerHTML = '<p class="empty">暂无目的地数据。</p>';
+        return;
+      }
+
+      // 逐项渲染。所有来自接口的文本都经 textContent 写入，不拼 HTML 字符串，
+      // 避免数据里出现尖括号时破坏页面结构。
+      const ul = document.createElement('ul');
+      ul.className = 'destinations';
+      items.forEach(function (item) {
+        const li = document.createElement('li');
+
+        const name = document.createElement('span');
+        name.className = 'name';
+        name.textContent = item.name || item.id || '(未命名)';
+        li.appendChild(name);
+
+        if (item.province) {
+          const province = document.createElement('span');
+          province.className = 'province';
+          province.textContent = item.province;
+          li.appendChild(province);
+        }
+
+        if (item.summary) {
+          const summary = document.createElement('div');
+          summary.className = 'summary';
+          summary.textContent = item.summary;
+          li.appendChild(summary);
+        }
+
+        ul.appendChild(li);
+      });
+
+      box.replaceChildren(ul);
+    } catch (err) {
+      box.innerHTML = '';
+      const p = document.createElement('p');
+      p.className = 'error';
+      p.textContent = '加载失败：' + err.message;
+      box.appendChild(p);
+    }
+  }
+
+  /** 刷新整页数据。两个请求互不依赖，并行发起、各自处理失败。 */
+  function refresh() {
+    renderHealth();
+    renderList();
+  }
+
+  document.getElementById('refresh').addEventListener('click', refresh);
+  refresh();
+</script>
+</body>
+</html>
