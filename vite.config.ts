@@ -1,12 +1,20 @@
 /**
  * Vite 构建与开发服务器配置。
  *
- * 只配置两件事：Vue 插件，以及开发期的 /api 转发。
+ * 配置三件事：Vue 插件、Element Plus 的按需加载插件，以及开发期的 /api 转发。
+ *
+ * **本文件的分区约定**：下面三个常量区（后端端口 / 前端端口 / Element Plus 按需加载）
+ * 互不相关，改动其中一区不得触碰另一区的取值。特别是 `BACKEND_PORT` 是后端监听端口的
+ * 唯一前端引用点，历史变更 `frontend-stack-and-toolchain` 已规定的
+ * 「前端源码不得声明后端端口」约束依赖它保持唯一。
  */
 
 import { fileURLToPath, URL } from 'node:url'
 
 import vue from '@vitejs/plugin-vue'
+import AutoImport from 'unplugin-auto-import/vite'
+import Components from 'unplugin-vue-components/vite'
+import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import { defineConfig } from 'vite'
 
 /**
@@ -31,8 +39,38 @@ const BACKEND_PORT = 18080
  */
 const DEV_SERVER_PORT = 5174
 
+/**
+ * Element Plus 按需加载的自动生成物目录。
+ *
+ * 两个插件各自产出一个声明文件：组件解析器产出组件类型，自动导入产出 API 类型。
+ * 二者都被 `tsconfig.json` 的 `include`（`src/**\/*.d.ts`）覆盖，因此
+ * 「模板里直接写组件标签、脚本里直接写函数名」不会触发 vue-tsc 的「找不到名称」错误。
+ *
+ * 放在 `src/` 下而非仓库根，是为了让类型声明的可见范围与源码一致——生成物在源码目录内，
+ * 阅读时更容易发现「这里的组件是自动引入的」。
+ */
+const AUTO_IMPORT_DTS = 'src/auto-imports.d.ts'
+const COMPONENTS_DTS = 'src/components.d.ts'
+
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue(),
+
+    // Element Plus 按需加载：解析模板中用到的组件，只把实际使用的组件与其样式纳入产物。
+    // 不使用全量注册（app.use(ElementPlus)）——那会把全部组件与样式打进产物，
+    // 而本项目实际用量远小于组件库规模（见 design.md 决策 2）。
+    AutoImport({
+      // 当前不自动导入任何第三方 API，只保留 Vue 自身的组合式 API，
+      // 避免「函数凭空出现」——那会削弱「错误暴露在阅读层面」这一项目首要指标。
+      imports: ['vue'],
+      resolvers: [ElementPlusResolver()],
+      dts: AUTO_IMPORT_DTS,
+    }),
+    Components({
+      resolvers: [ElementPlusResolver()],
+      dts: COMPONENTS_DTS,
+    }),
+  ],
   resolve: {
     alias: {
       // '@' 指向源码根，使跨目录引用（如页面引用接口层）不依赖相对层级深度。
