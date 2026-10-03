@@ -1,7 +1,20 @@
 # 前端仓库的忽略规则。
 #
-# 前端为零构建的静态页面，由独立静态服务托管，没有构建产物需要忽略，
-# 因此这里只排除编辑器与本机产生的噪音文件。
+# 前端为 Vite + Vue 3 + TypeScript 工程：源码在 src/，依赖装在 node_modules/，
+# 构建产物在 dist/。三者中只有 src/ 与工程配置文件进入版本库，其余为可再生内容。
+
+# 依赖目录：由 npm install 依 package-lock.json 还原，不入库。
+node_modules/
+
+# 构建产物：由 npm run build 产出，部署时现构建，不入库。
+dist/
+
+# 构建缓存：Vite 的预打包缓存。
+.vite/
+
+# npm 日志与调试产物。
+npm-debug.log*
+.npm/
 
 # 编辑器 / 本机
 .DS_Store

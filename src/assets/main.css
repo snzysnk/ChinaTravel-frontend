@@ -1,0 +1,30 @@
+/**
+ * 全局样式。
+ *
+ * 内容从零构建版本的 index.html 内联 <style> 原样搬运，未做视觉调整——
+ * 本次变更的目标是工程化迁移，不是重做界面（见 design.md 决策 7）。
+ */
+
+:root {
+  --bg: #f6f7f9;
+  --card: #ffffff;
+  --border: #e3e6ea;
+  --text: #1f2328;
+  --muted: #6b7280;
+  --ok: #1a7f37;
+  --ok-bg: #eaf6ec;
+  --bad: #b42318;
+  --bad-bg: #fdecea;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 32px 20px 64px;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.6 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+}

@@ -1,0 +1,93 @@
+/**
+ * 页面级样式。
+ *
+ * 从零构建版本 index.html 的内联 <style> 中属于页面的部分原样搬运。
+ * 用 .page 类包裹而非全局选择器，避免后续新增页面时样式互相污染。
+ */
+
+.page {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.page h1 {
+  font-size: 20px;
+  margin: 0 0 4px;
+}
+
+.subtitle {
+  color: var(--muted);
+  margin: 0 0 24px;
+  font-size: 13px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+
+.card h2 {
+  font-size: 14px;
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.status.ok {
+  color: var(--ok);
+  background: var(--ok-bg);
+}
+
+.status.bad {
+  color: var(--bad);
+  background: var(--bad-bg);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.empty,
+.error {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 8px 0;
+}
+
+.error {
+  color: var(--bad);
+}
+
+button {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #f2f4f6;
+}
+
+.refresh-row {
+  margin: 12px 0 0;
+}
